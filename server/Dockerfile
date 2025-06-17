@@ -3,18 +3,26 @@
 # --- Build Stage ---
 FROM rust:1.78 as builder
 
-# Set up the workspace
-WORKDIR /usr/src/app
-COPY . .
+# Install musl target
+RUN rustup target add x86_64-unknown-linux-musl
 
-# Build the server binary
-RUN cargo build --release -p server
+# Create a new empty project to cache dependencies
+WORKDIR /usr/src/app
+RUN cargo new --bin server
+WORKDIR /usr/src/app/server
+COPY Cargo.toml Cargo.lock ./
+RUN cargo build --release --target x86_64-unknown-linux-musl --all-features
+
+# Copy your actual source code
+COPY src ./src
+RUN touch src/main.rs && cargo build --release --target x86_64-unknown-linux-musl --all-features
 
 # --- Final Stage ---
-FROM debian:buster-slim
+# Use a minimal image
+FROM scratch
 
 # Copy the server binary from the builder stage
-COPY --from=builder /usr/src/app/target/release/server /usr/local/bin/server
+COPY --from=builder /usr/src/app/server/target/x86_64-unknown-linux-musl/release/server /server
 
 # Set the binary as the entrypoint
-ENTRYPOINT ["/usr/local/bin/server"] 
+ENTRYPOINT ["/server"] 

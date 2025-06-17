@@ -11,8 +11,7 @@ use bevy::prelude::*;
 use futures::{sink::SinkExt, stream::StreamExt};
 use shared::*;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use bincode;
@@ -29,6 +28,10 @@ struct AppState {
     client_msg_tx: mpsc::Sender<(PlayerId, ClientToServerMsg)>,
     db_pool: PgPool,
 }
+
+// A newtype wrapper around Arc<Mutex<World>> to make it a valid Axum State
+#[derive(Clone, FromRef)]
+struct AxumState(Arc<Mutex<World>>);
 
 #[derive(Event)]
 struct PlayerDisconnect {
@@ -66,15 +69,19 @@ async fn main() {
     app.insert_resource(app_state);
 
     let world = Arc::new(Mutex::new(app.world));
+    let axum_state = AxumState(world.clone());
 
     // Run Bevy app in a separate thread
     let bevy_thread = std::thread::spawn(move || {
-        app.run();
+        loop {
+            world.lock().unwrap().update();
+            std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / 60.0));
+        }
     });
 
     let router = Router::new()
         .route("/game", get(ws_handler))
-        .with_state(world);
+        .with_state(axum_state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
@@ -86,8 +93,8 @@ async fn main() {
     bevy_thread.join().unwrap();
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(world): State<Arc<Mutex<World>>>) -> Response {
-    ws.on_upgrade(move |socket| handle_socket(socket, world))
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AxumState>) -> Response {
+    ws.on_upgrade(move |socket| handle_socket(socket, state.0))
 }
 
 async fn handle_socket(socket: WebSocket, world: Arc<Mutex<World>>) {
@@ -99,7 +106,9 @@ async fn handle_socket(socket: WebSocket, world: Arc<Mutex<World>>) {
 
     // Mock login/signup
     // In a real app, you'd get username/password from the client
-    let username = format!("Player_{}", app_state.clients.lock().unwrap().len());
+    let clients = app_state.clients.lock().unwrap();
+    let username = format!("Player_{}", clients.len());
+    drop(clients); // Release the lock
     let user_record = sqlx::query!("SELECT id, last_position_x, last_position_y FROM players WHERE username = $1", username)
         .fetch_optional(&db_pool)
         .await
@@ -117,7 +126,11 @@ async fn handle_socket(socket: WebSocket, world: Arc<Mutex<World>>) {
 
     let (tx, mut rx) = mpsc::channel(100);
     app_state.clients.lock().unwrap().push(tx.clone());
-    let client_id = app_state.clients.lock().unwrap().len() - 1;
+    
+    // Get the index of the newly added client
+    let clients = app_state.clients.lock().unwrap();
+    let client_id = clients.len() - 1;
+    drop(clients);
 
     // Spawn player entity in Bevy world
     world.lock().unwrap().spawn((
@@ -191,7 +204,15 @@ async fn handle_socket(socket: WebSocket, world: Arc<Mutex<World>>) {
 
     info!("Client {} disconnected", client_id);
     world.lock().unwrap().send_event(PlayerDisconnect { player_id });
-    app_state.clients.lock().unwrap().remove(client_id);
+    
+    // Find and remove the client's sender channel
+    let mut clients = app_state.clients.lock().unwrap();
+    if let Some(pos) = clients.iter().position(|x| x.same_channel(&tx)) {
+        clients.remove(pos);
+        info!("Removed client channel at position {}", pos);
+    } else {
+        warn!("Could not find client channel to remove on disconnect");
+    }
 }
 
 fn player_spawn_system(query: Query<(Entity, &PlayerId), Added<Player>>) {
@@ -204,19 +225,20 @@ fn handle_client_messages(
     mut query: Query<(&PlayerId, &mut TargetDestination)>,
     app_state: Res<AppState>,
 ) {
-    let mut rx = app_state.client_msg_rx.lock().unwrap();
-    while let Ok((player_id, msg)) = rx.try_recv() {
-        match msg {
-            ClientToServerMsg::ClickPosition { x, y } => {
-                for (p_id, mut target_dest) in query.iter_mut() {
-                    if *p_id == player_id {
-                        target_dest.x = x;
-                        target_dest.y = y;
-                        break;
+    if let Ok(mut rx) = app_state.client_msg_rx.try_lock() {
+        while let Ok((player_id, msg)) = rx.try_recv() {
+            match msg {
+                ClientToServerMsg::ClickPosition { x, y } => {
+                    for (p_id, mut target_dest) in query.iter_mut() {
+                        if *p_id == player_id {
+                            target_dest.x = x;
+                            target_dest.y = y;
+                            break;
+                        }
                     }
                 }
+                ClientToServerMsg::Ping => {}
             }
-            ClientToServerMsg::Ping => {}
         }
     }
 }
@@ -251,13 +273,21 @@ async fn broadcast_message(
     msg: Message,
     exclude_id: Option<usize>,
 ) {
-    let clients = clients.lock().unwrap();
-    for (i, client) in clients.iter().enumerate() {
+    let mut clients_guard = clients.lock().unwrap();
+    let mut dead_clients = Vec::new();
+
+    for (i, client) in clients_guard.iter_mut().enumerate() {
         if exclude_id.map_or(true, |id| i != id) {
-            if client.send(msg.clone()).await.is_err() {
-                warn!("Failed to send message to client {}", i);
+            if client.try_send(msg.clone()).is_err() {
+                // Channel is full or disconnected, mark for removal
+                dead_clients.push(i);
             }
         }
+    }
+
+    // Remove dead clients
+    for i in dead_clients.iter().rev() {
+        clients_guard.remove(*i);
     }
 }
 
