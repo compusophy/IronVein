@@ -81,7 +81,11 @@ async fn main() {
 
     let bevy_thread = std::thread::spawn(move || {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, ScheduleRunnerPlugin::default(), TaskPoolPlugin::default()));
+        app.add_plugins((
+            MinimalPlugins,
+            ScheduleRunnerPlugin::default(),
+            TaskPoolPlugin::default(),
+        ));
         app.insert_resource(Clients::default());
         app.insert_resource(WorldCommandRx(world_cmd_rx));
         app.insert_resource(ClientMessageRx(client_msg_rx));
@@ -203,7 +207,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 type PlayerDbInfoTask = Task<(PlayerId, Position)>;
 
 #[derive(Component)]
-struct NewPlayerDbInfo(Option<PlayerDbInfoTask>);
+struct NewPlayerDbInfo(PlayerDbInfoTask);
 
 /// Handles commands from Axum, like spawning a player entity after a DB query.
 fn handle_world_commands(
@@ -215,51 +219,47 @@ fn handle_world_commands(
 ) {
     // Handle completed DB queries for new players
     for (entity, mut new_player_info) in new_players.iter_mut() {
-        if let Some(task) = new_player_info.0.take() {
-            if let Some((player_id, start_pos)) = task.now_or_never() {
-                let client_id_val = player_id.0 as usize;
-                if let Some(Some(client_tx)) = clients.get(client_id_val).cloned() {
-                    // Send Welcome message
-                    let welcome_msg = ServerToClientMsg::Welcome {
-                        player_id,
-                        config: GameConfig {
-                            map_width: 800,
-                            map_height: 600,
-                        },
-                    };
-                    let welcome_msg_binary = bincode::serialize(&welcome_msg).unwrap();
-                    client_tx
-                        .try_send(Message::Binary(welcome_msg_binary))
-                        .ok();
+        if let Some((player_id, start_pos)) = new_player_info.0.try_take() {
+            let client_id_val = player_id.0 as usize;
+            if let Some(Some(client_tx)) = clients.get(client_id_val).cloned() {
+                // Send Welcome message
+                let welcome_msg = ServerToClientMsg::Welcome {
+                    player_id,
+                    config: GameConfig {
+                        map_width: 800,
+                        map_height: 600,
+                    },
+                };
+                let welcome_msg_binary = bincode::serialize(&welcome_msg).unwrap();
+                client_tx
+                    .try_send(Message::Binary(welcome_msg_binary))
+                    .ok();
 
-                    // Broadcast PlayerJoined
-                    let joined_msg = ServerToClientMsg::PlayerJoined(player_id, start_pos);
-                    let joined_msg_binary = bincode::serialize(&joined_msg).unwrap();
-                    let clients = clients.clone();
-                    IoTaskPool::get()
-                        .spawn(async move {
-                            broadcast_message(
-                                &clients,
-                                Message::Binary(joined_msg_binary),
-                                Some(client_id_val),
-                            )
-                            .await;
-                        })
-                        .detach();
+                // Broadcast PlayerJoined
+                let joined_msg = ServerToClientMsg::PlayerJoined(player_id, start_pos);
+                let joined_msg_binary = bincode::serialize(&joined_msg).unwrap();
+                let clients = clients.clone();
+                IoTaskPool::get()
+                    .spawn(async move {
+                        broadcast_message(
+                            &clients,
+                            Message::Binary(joined_msg_binary),
+                            Some(client_id_val),
+                        )
+                        .await;
+                    })
+                    .detach();
 
-                    // Add components to the player entity
-                    commands.entity(entity).insert((
-                        Player,
-                        player_id,
-                        start_pos,
-                        TargetDestination(start_pos),
-                    ));
-                }
-                commands.entity(entity).remove::<NewPlayerDbInfo>();
-            } else {
-                // Task not ready, put it back
-                new_player_info.0 = Some(task);
+                // Add components to the player entity
+                commands.entity(entity).insert((
+                    Player,
+                    player_id,
+                    start_pos,
+                    TargetDestination(start_pos),
+                ));
             }
+            // The task is finished, so now we can remove the component.
+            commands.entity(entity).remove::<NewPlayerDbInfo>();
         }
     }
 
@@ -287,7 +287,7 @@ fn handle_world_commands(
                         (PlayerId(new_player.id as u64), Position { x: new_player.last_position_x, y: new_player.last_position_y })
                     }
                 });
-                commands.spawn(NewPlayerDbInfo(Some(task)));
+                commands.spawn(NewPlayerDbInfo(task));
             }
             WorldCommand::Disconnect { client_id } => {
                 clients[client_id] = None;
