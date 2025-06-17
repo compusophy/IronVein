@@ -8,13 +8,13 @@ The system is designed as a set of three distinct services deployed on Railway, 
 ```mermaid
 graph TD
     subgraph "Player's Browser"
-        A[Web Client (Bevy WASM)]
+        A["Web Client (Bevy WASM)"]
     end
 
     subgraph "Railway Platform"
-        B[Game Server (Rust/Axum/Bevy)]
-        C[PostgreSQL Database]
-        D[Static File Service for Client]
+        B["Game Server (Rust/Axum/Bevy)"]
+        C["PostgreSQL Database"]
+        D["Static File Service for Client"]
     end
 
     A --"1. Load Client (HTTPS)"--> D
