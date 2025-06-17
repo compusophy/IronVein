@@ -16,25 +16,6 @@ The initial implementation is a simple online world where players appear as colo
 
 The system is designed as a set of three distinct services, typically deployed on a cloud platform like Railway, following a modern microservices pattern.
 
-### Architecture Diagram
-
-```mermaid
-graph TD
-    subgraph "Player's Browser"
-        A["Web Client<br/>(Bevy WASM)"]
-    end
-
-    subgraph "Railway Platform"
-        B["Game Server<br/>(Rust/Axum/Bevy)"]
-        C["PostgreSQL Database"]
-        D["Static File Service<br/>(for Client)"]
-    end
-
-    A -- "1. Load Client (HTTPS)" --> D
-    A -- "2. Connect (WSS)" --> B
-    B -- "3. Persist/Load Data (TCP)" --> C
-```
-
 ### Service Descriptions
 
 *   **Game Server (The Core Logic)**: A headless Rust application that runs the main game loop. It processes player input, handles all game logic (movement, state changes), and serves as the single source of truth for the game state. It communicates with clients via WebSockets.
