@@ -80,11 +80,7 @@ async fn main() {
 
     let bevy_thread = std::thread::spawn(move || {
         let mut app = App::new();
-        app.add_plugins((
-            MinimalPlugins,
-            bevy::core::TaskPoolPlugin::default(),
-            bevy::app::ScheduleRunnerPlugin::default(),
-        ));
+        app.add_plugins(MinimalPlugins);
         app.insert_resource(Clients::default());
         app.insert_resource(WorldCommandRx(world_cmd_rx));
         app.insert_resource(ClientMessageRx(client_msg_rx));
