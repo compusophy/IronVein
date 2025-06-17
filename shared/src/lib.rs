@@ -1,27 +1,33 @@
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::prelude::Component;
 use serde::{Deserialize, Serialize};
 
 // A unique identifier for a player entity.
-#[derive(Component, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Component))]
 pub struct PlayerId(pub u64);
 
 // The player's current position on the grid.
-#[derive(Component, Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Component))]
 pub struct Position {
     pub x: f32,
     pub y: f32,
 }
 
 // The player's target destination. The server will move the player towards this.
-#[derive(Component, Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Component))]
 pub struct TargetDestination(pub Position);
 
 // A simple component to identify the player entity.
-#[derive(Component, Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Component))]
 pub struct Player;
 
 // A simple component to identify entities controlled by other players.
-#[derive(Component, Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Component))]
 pub struct Enemy;
 
 // Game configuration that can be sent to the client on connection.

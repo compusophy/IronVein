@@ -10,9 +10,9 @@ use axum::{
 use bevy::{
     app::ScheduleRunnerPlugin,
     prelude::*,
-    tasks::{IoTaskPool, Task, TaskPoolPlugin},
+    tasks::IoTaskPool,
 };
-use futures_util::{future::FutureExt, stream::StreamExt, SinkExt};
+use futures_util::{stream::StreamExt, SinkExt};
 use shared::*;
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
@@ -84,7 +84,6 @@ async fn main() {
         app.add_plugins((
             MinimalPlugins,
             ScheduleRunnerPlugin::default(),
-            TaskPoolPlugin::default(),
         ));
         app.insert_resource(Clients::default());
         app.insert_resource(WorldCommandRx(world_cmd_rx));
@@ -116,7 +115,9 @@ async fn main() {
         .route("/game", get(ws_handler))
         .with_state(axum_state);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let port: u16 = port.parse().expect("PORT must be a valid number");
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     info!("Axum server listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, router.into_make_service())
@@ -204,23 +205,28 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
 // --- Bevy Systems ---
 
-type PlayerDbInfoTask = Task<(PlayerId, Position)>;
-
 #[derive(Component)]
-struct NewPlayerDbInfo(PlayerDbInfoTask);
+struct NewPlayerDbInfo {
+    player_id: PlayerId,
+    position: Position,
+    ready: bool,
+}
 
 /// Handles commands from Axum, like spawning a player entity after a DB query.
 fn handle_world_commands(
     mut commands: Commands,
     mut world_cmd_rx: ResMut<WorldCommandRx>,
     mut clients: ResMut<Clients>,
-    db_pool: Res<DbPool>,
-    mut new_players: Query<(Entity, &mut NewPlayerDbInfo)>,
+    _db_pool: Res<DbPool>,
+    new_players: Query<(Entity, &NewPlayerDbInfo)>,
 ) {
     // Handle completed DB queries for new players
-    for (entity, mut new_player_info) in new_players.iter_mut() {
-        if let Some((player_id, start_pos)) = new_player_info.0.try_take() {
+    for (entity, new_player_info) in new_players.iter() {
+        if new_player_info.ready {
+            let player_id = new_player_info.player_id;
+            let start_pos = new_player_info.position;
             let client_id_val = player_id.0 as usize;
+            
             if let Some(Some(client_tx)) = clients.get(client_id_val).cloned() {
                 // Send Welcome message
                 let welcome_msg = ServerToClientMsg::Welcome {
@@ -258,7 +264,7 @@ fn handle_world_commands(
                     TargetDestination(start_pos),
                 ));
             }
-            // The task is finished, so now we can remove the component.
+            // The player is ready, so now we can remove the component.
             commands.entity(entity).remove::<NewPlayerDbInfo>();
         }
     }
@@ -271,23 +277,16 @@ fn handle_world_commands(
                 clients.push(Some(client_tx.clone()));
                 client_tx.try_send(Message::Text(client_id.to_string())).ok();
 
-                let pool = db_pool.0.clone();
-                let task = IoTaskPool::get().spawn(async move {
-                    let username = format!("Player_{}", client_id);
-                    let user_record = sqlx::query_as::<_, DbPlayer>("SELECT id, last_position_x, last_position_y FROM players WHERE username = $1")
-                        .bind(&username)
-                        .fetch_optional(&pool)
-                        .await.ok().flatten();
-
-                    if let Some(player) = user_record {
-                        (PlayerId(player.id as u64), Position { x: player.last_position_x, y: player.last_position_y })
-                    } else {
-                        let new_player = sqlx::query_as::<_, DbPlayer>("INSERT INTO players (username, password_hash) VALUES ($1, $2) RETURNING id, last_position_x, last_position_y")
-                            .bind(&username).bind("password").fetch_one(&pool).await.unwrap();
-                        (PlayerId(new_player.id as u64), Position { x: new_player.last_position_x, y: new_player.last_position_y })
-                    }
+                // For now, create a simple player without database lookup
+                // In a real implementation, this would be handled by a separate async system
+                let player_id = PlayerId(client_id as u64);
+                let start_pos = Position { x: 400.0, y: 300.0 };
+                
+                commands.spawn(NewPlayerDbInfo {
+                    player_id,
+                    position: start_pos,
+                    ready: true,
                 });
-                commands.spawn(NewPlayerDbInfo(task));
             }
             WorldCommand::Disconnect { client_id } => {
                 clients[client_id] = None;

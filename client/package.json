@@ -6,9 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build-wasm": "wasm-pack build ./ --target web",
+    "build-full": "npm run build-wasm && npm run build",
     "preview": "vite preview"
   },
-  "dependencies": {},
+  "dependencies": {
+    "serve": "^14.2.0"
+  },
   "devDependencies": {
     "vite": "^5.0.0",
     "vite-plugin-wasm-pack": "^0.1.12"

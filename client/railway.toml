@@ -1,0 +1,13 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "npx serve dist -p $PORT"
+healthcheckPath = "/"
+
+[env]
+NODE_ENV = "production"
+
+# Ensure Rust is available for wasm-pack
+[build.nixpacksSetup]
+rust = true 
