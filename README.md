@@ -160,20 +160,20 @@ This will be implemented in sequential order.
 - [x] Basic WASM Client: Create a minimal Bevy client that compiles to WASM, draws a blue background, and connects to the WebSocket server.
 - [x] Implement Protocol: Add the ClientToServerMsg and ServerToClientMsg enums to the shared crate. Implement bincode serialization/deserialization on both ends.
 - [x] Player Spawning (Server):
-  - On WebSocket connect, spawn a new Bevy entity with Player, PlayerId, and a default Position.
-  - Broadcast a ServerToClientMsg::PlayerJoined message to all other clients.
-  - Send the ServerToClientMsg::Welcome message to the new client.
+  On WebSocket connect, spawn a new Bevy entity with Player, PlayerId, and a default Position.
+  Broadcast a ServerToClientMsg::PlayerJoined message to all other clients.
+  Send the ServerToClientMsg::Welcome message to the new client.
 - [x] Player Rendering (Client):
-  - When the client receives Welcome, it should store its own PlayerId.
-  - When receiving a WorldStateSnapshot or PlayerJoined message, it should spawn entities with Position components.
-  - Render its own player entity as a blue ball and all other players as red balls.
+  When the client receives Welcome, it should store its own PlayerId.
+  When receiving a WorldStateSnapshot or PlayerJoined message, it should spawn entities with Position components.
+  Render its own player entity as a blue ball and all other players as red balls.
 - [x] Movement Logic:
-  - Client: On click, send a ClientToServerMsg::ClickPosition message.
-  - Server: On receiving ClickPosition, update the TargetDestination component for that player's entity.
-  - Server: Create a Bevy system that iterates through entities with Position and TargetDestination and moves them slightly closer each frame (simple linear interpolation).
-  - Server: Create a Bevy system that periodically broadcasts a WorldStateSnapshot of all player positions to all clients.
-  - Client: When receiving WorldStateSnapshot, update the Position of all rendered entities, which will move them on screen.
+  Client: On click, send a ClientToServerMsg::ClickPosition message.
+  Server: On receiving ClickPosition, update the TargetDestination component for that player's entity.
+  Server: Create a Bevy system that iterates through entities with Position and TargetDestination and moves them slightly closer each frame (simple linear interpolation).
+  Server: Create a Bevy system that periodically broadcasts a WorldStateSnapshot of all player positions to all clients.
+  Client: When receiving WorldStateSnapshot, update the Position of all rendered entities, which will move them on screen.
 - [ ] Database Integration:
-  - Use sqlx-cli to set up migrations.
-  - On WebSocket connect (before spawning), perform a mock "login" and load/save the player's last_position from the PostgreSQL database.
+  Use sqlx-cli to set up migrations.
+  On WebSocket connect (before spawning), perform a mock "login" and load/save the player's last_position from the PostgreSQL database.
 - [ ] Deployment: Configure Dockerfile and railway.json to deploy the three services to Railway.
