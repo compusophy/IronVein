@@ -25,4 +25,12 @@ FROM scratch
 COPY --from=builder /usr/src/app/server/target/x86_64-unknown-linux-musl/release/server /server
 
 # Set the binary as the entrypoint
-ENTRYPOINT ["/server"] 
+ENTRYPOINT ["/server"]
+
+# set up the workspace
+COPY . /app/.
+
+# build the server
+RUN --mount=type=cache,id=s/${{NIXPACKS_PLAN_ID}}-/root/cargo/git,target=/root/.cargo/git \
+    --mount=type=cache,id=s/${{NIXPACKS_PLAN_ID}}-/root/cargo/registry,target=/root/.cargo/registry \
+    cargo build --release --target x86_64-unknown-linux-musl --all-features 
