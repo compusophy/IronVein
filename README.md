@@ -19,20 +19,20 @@ The system is designed as a set of three distinct services, typically deployed o
 ### Architecture Diagram
 
 ```mermaid
-graph TD;
-    subgraph "Player's Browser";
-        A["Web Client<br/>(Bevy WASM)"];
-    end;
+graph TD
+    subgraph "Player's Browser"
+        A["Web Client<br/>(Bevy WASM)"]
+    end
 
-    subgraph "Railway Platform";
-        B["Game Server<br/>(Rust/Axum/Bevy)"];
-        C["PostgreSQL Database"];
-        D["Static File Service<br/>(for Client)"];
-    end;
+    subgraph "Railway Platform"
+        B["Game Server<br/>(Rust/Axum/Bevy)"]
+        C["PostgreSQL Database"]
+        D["Static File Service<br/>(for Client)"]
+    end
 
-    A -- "1. Load Client (HTTPS)" --> D;
-    A -- "2. Connect (WSS)" --> B;
-    B -- "3. Persist/Load Data (TCP)" --> C;
+    A -- "1. Load Client (HTTPS)" --> D
+    A -- "2. Connect (WSS)" --> B
+    B -- "3. Persist/Load Data (TCP)" --> C
 ```
 
 ### Service Descriptions
@@ -187,25 +187,25 @@ CREATE TABLE players (
 
 This project is being implemented in sequential order.
 
--   [x] **Workspace Setup**: Create the Cargo workspace and the `server`, `client`, and `shared` crates as defined in section 4.
--   [x] **Basic WebSocket Server**: Implement a minimal Axum server that accepts a WebSocket connection, prints a message, and closes.
--   [x] **Basic WASM Client**: Create a minimal Bevy client that compiles to WASM, draws a blue background, and connects to the WebSocket server.
--   [x] **Implement Protocol**: Add the `ClientToServerMsg` and `ServerToClientMsg` enums to the `shared` crate. Implement `bincode` serialization/deserialization on both ends.
--   [x] **Player Spawning (Server)**:
-    -   On WebSocket connect, spawn a new Bevy entity with `Player`, `PlayerId`, and a default `Position`.
-    -   Broadcast a `ServerToClientMsg::PlayerJoined` message to all other clients.
-    -   Send the `ServerToClientMsg::Welcome` message to the new client.
--   [x] **Player Rendering (Client)**:
-    -   When the client receives `Welcome`, it should store its own `PlayerId`.
-    -   When receiving a `WorldStateSnapshot` or `PlayerJoined` message, it should spawn entities with `Position` components.
-    -   Render its own player entity as a blue ball and all other players as red balls.
--   [x] **Movement Logic**:
-    -   **Client**: On click, send a `ClientToServerMsg::ClickPosition` message.
-    -   **Server**: On receiving `ClickPosition`, update the `TargetDestination` component for that player's entity.
-    -   **Server**: Create a Bevy system that iterates through entities with `Position` and `TargetDestination` and moves them slightly closer each frame (simple linear interpolation).
-    -   **Server**: Create a Bevy system that periodically broadcasts a `WorldStateSnapshot` of all player positions to all clients.
-    -   **Client**: When receiving `WorldStateSnapshot`, update the `Position` of all rendered entities, which will move them on screen.
--   [ ] **Database Integration**:
-    -   Use `sqlx-cli` to set up migrations.
-    -   On WebSocket connect (before spawning), perform a mock "login" and load/save the player's `last_position` from the PostgreSQL database.
--   [ ] **Deployment**: Configure `Dockerfile` and `railway.json` to deploy the three services to Railway.
+*   [x] **Workspace Setup**: Create the Cargo workspace and the `server`, `client`, and `shared` crates as defined in section 4.
+*   [x] **Basic WebSocket Server**: Implement a minimal Axum server that accepts a WebSocket connection, prints a message, and closes.
+*   [x] **Basic WASM Client**: Create a minimal Bevy client that compiles to WASM, draws a blue background, and connects to the WebSocket server.
+*   [x] **Implement Protocol**: Add the `ClientToServerMsg` and `ServerToClientMsg` enums to the `shared` crate. Implement `bincode` serialization/deserialization on both ends.
+*   [x] **Player Spawning (Server)**
+    *   On WebSocket connect, spawn a new Bevy entity with `Player`, `PlayerId`, and a default `Position`.
+    *   Broadcast a `ServerToClientMsg::PlayerJoined` message to all other clients.
+    *   Send the `ServerToClientMsg::Welcome` message to the new client.
+*   [x] **Player Rendering (Client)**
+    *   When the client receives `Welcome`, it should store its own `PlayerId`.
+    *   When receiving a `WorldStateSnapshot` or `PlayerJoined` message, it should spawn entities with `Position` components.
+    *   Render its own player entity as a blue ball and all other players as red balls.
+*   [x] **Movement Logic**
+    *   **Client**: On click, send a `ClientToServerMsg::ClickPosition` message.
+    *   **Server**: On receiving `ClickPosition`, update the `TargetDestination` component for that player's entity.
+    *   **Server**: Create a Bevy system that iterates through entities with `Position` and `TargetDestination` and moves them slightly closer each frame (simple linear interpolation).
+    *   **Server**: Create a Bevy system that periodically broadcasts a `WorldStateSnapshot` of all player positions to all clients.
+    *   **Client**: When receiving `WorldStateSnapshot`, update the `Position` of all rendered entities, which will move them on screen.
+*   [ ] **Database Integration**
+    *   Use `sqlx-cli` to set up migrations.
+    *   On WebSocket connect (before spawning), perform a mock "login" and load/save the player's `last_position` from the PostgreSQL database.
+*   [ ] **Deployment**: Configure `Dockerfile` and `railway.json` to deploy the three services to Railway.
