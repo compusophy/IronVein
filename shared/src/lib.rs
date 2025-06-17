@@ -14,10 +14,7 @@ pub struct Position {
 
 // The player's target destination. The server will move the player towards this.
 #[derive(Component, Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
-pub struct TargetDestination {
-    pub x: f32,
-    pub y: f32,
-}
+pub struct TargetDestination(pub Position);
 
 // A simple component to identify the player entity.
 #[derive(Component, Serialize, Deserialize, Debug, Clone)]
