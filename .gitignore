@@ -1,0 +1,10 @@
+# Ignore environment variables
+.env
+
+# Ignore build artifacts
+/target
+Cargo.lock
+
+# Ignore node modules
+/client/node_modules
+/client/dist 

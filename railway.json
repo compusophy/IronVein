@@ -1,0 +1,23 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "services": [
+    {
+      "name": "server",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "server/Dockerfile"
+      },
+      "healthcheck": {
+        "path": "/",
+        "port": 3000
+      }
+    },
+    {
+      "name": "client",
+      "build": {
+        "builder": "NIXPACKS"
+      },
+      "startCommand": "npm run preview -- --host 0.0.0.0 --port $PORT"
+    }
+  ]
+} 
