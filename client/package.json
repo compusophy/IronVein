@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "cp -r pkg ../pkg 2>/dev/null || xcopy pkg ..\\pkg /E /I /Y 2>nul || echo 'pkg copy failed, continuing...' && vite build",
     "build-wasm": "wasm-pack build ./ --target web",
     "build-full": "npm run build-wasm && npm run build",
     "preview": "vite preview"
